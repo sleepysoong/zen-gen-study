@@ -1,150 +1,90 @@
 /**
  * YouTube 자막 추출 API
- * Vercel Edge Function
+ * Vercel Serverless Function
  */
+import { YoutubeTranscript } from 'youtube-transcript';
 
-export const config = {
-    runtime: 'edge',
-};
+export default async function handler(req, res) {
+    // CORS 헤더 설정
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-export default async function handler(request) {
-    const url = new URL(request.url);
-    const videoId = url.searchParams.get('videoId');
-    const lang = url.searchParams.get('lang') || 'ko';
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    const { videoId, lang = 'ko' } = req.query;
 
     if (!videoId) {
-        return new Response(JSON.stringify({ error: 'videoId is required' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return res.status(400).json({ error: 'videoId is required' });
     }
 
     try {
-        // YouTube 영상 페이지에서 자막 데이터 추출
-        const transcript = await fetchYouTubeTranscript(videoId, lang);
-
-        return new Response(JSON.stringify(transcript), {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-            },
+        // youtube-transcript 패키지를 사용하여 자막 가져오기
+        // 자동 생성 자막도 지원됨
+        const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId, {
+            lang: lang,
         });
+
+        if (!transcriptItems || transcriptItems.length === 0) {
+            // 한국어 자막이 없으면 영어 시도
+            const englishTranscript = await YoutubeTranscript.fetchTranscript(videoId, {
+                lang: 'en',
+            }).catch(() => null);
+
+            if (englishTranscript && englishTranscript.length > 0) {
+                return formatAndSend(res, videoId, 'en', englishTranscript);
+            }
+
+            // 영어도 없으면 언어 지정 없이 시도 (자동 생성 자막 포함)
+            const anyTranscript = await YoutubeTranscript.fetchTranscript(videoId).catch(() => null);
+
+            if (anyTranscript && anyTranscript.length > 0) {
+                return formatAndSend(res, videoId, 'auto', anyTranscript);
+            }
+
+            return res.status(404).json({
+                error: '이 영상에는 자막이 없습니다.',
+                videoId,
+            });
+        }
+
+        return formatAndSend(res, videoId, lang, transcriptItems);
     } catch (error) {
         console.error('Transcript fetch error:', error);
-        return new Response(JSON.stringify({
-            error: error.message || 'Failed to fetch transcript',
+
+        // 에러 발생 시 언어 지정 없이 재시도
+        try {
+            const fallbackTranscript = await YoutubeTranscript.fetchTranscript(videoId);
+            if (fallbackTranscript && fallbackTranscript.length > 0) {
+                return formatAndSend(res, videoId, 'auto', fallbackTranscript);
+            }
+        } catch (fallbackError) {
+            console.error('Fallback also failed:', fallbackError);
+        }
+
+        return res.status(500).json({
+            error: error.message || '자막을 가져올 수 없습니다.',
             videoId,
-        }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
         });
     }
 }
 
-async function fetchYouTubeTranscript(videoId, lang) {
-    // YouTube 영상 페이지 가져오기
-    const videoPageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-        },
-    });
+function formatAndSend(res, videoId, language, transcriptItems) {
+    const segments = transcriptItems.map((item) => ({
+        start: item.offset / 1000, // ms to seconds
+        duration: item.duration / 1000,
+        text: item.text,
+    }));
 
-    if (!videoPageResponse.ok) {
-        throw new Error('Failed to fetch video page');
-    }
+    const fullText = segments.map((s) => s.text).join(' ');
 
-    const html = await videoPageResponse.text();
-
-    // captions 데이터 추출
-    const captionsMatch = html.match(/"captions":\s*(\{[^}]+playerCaptionsTracklistRenderer[^}]+\})/);
-
-    if (!captionsMatch) {
-        // 자막이 없는 경우 - 자동 생성 자막 시도
-        const innertubeMatch = html.match(/"captionTracks":\s*(\[[^\]]+\])/);
-        if (!innertubeMatch) {
-            throw new Error('이 영상에는 자막이 없습니다.');
-        }
-    }
-
-    // captionTracks 추출
-    const captionTracksMatch = html.match(/"captionTracks":\s*(\[[^\]]+\])/);
-
-    if (!captionTracksMatch) {
-        throw new Error('자막 트랙을 찾을 수 없습니다.');
-    }
-
-    let captionTracks;
-    try {
-        // JSON 파싱을 위해 이스케이프 문자 처리
-        const tracksJson = captionTracksMatch[1]
-            .replace(/\\u0026/g, '&')
-            .replace(/\\"/g, '"');
-        captionTracks = JSON.parse(tracksJson);
-    } catch (e) {
-        throw new Error('자막 데이터 파싱 실패');
-    }
-
-    if (!captionTracks || captionTracks.length === 0) {
-        throw new Error('사용 가능한 자막이 없습니다.');
-    }
-
-    // 원하는 언어의 자막 찾기, 없으면 첫 번째 자막 사용
-    let targetTrack = captionTracks.find(track =>
-        track.languageCode === lang || track.vssId?.includes(lang)
-    );
-
-    if (!targetTrack) {
-        // 한국어 없으면 영어, 없으면 첫 번째
-        targetTrack = captionTracks.find(track => track.languageCode === 'en') || captionTracks[0];
-    }
-
-    if (!targetTrack?.baseUrl) {
-        throw new Error('자막 URL을 찾을 수 없습니다.');
-    }
-
-    // 자막 XML 가져오기
-    const captionUrl = targetTrack.baseUrl.replace(/\\u0026/g, '&');
-    const captionResponse = await fetch(captionUrl);
-
-    if (!captionResponse.ok) {
-        throw new Error('자막 데이터를 가져올 수 없습니다.');
-    }
-
-    const captionXml = await captionResponse.text();
-
-    // XML에서 자막 텍스트 추출
-    const segments = [];
-    const textRegex = /<text start="([^"]+)" dur="([^"]+)"[^>]*>([^<]*)<\/text>/g;
-    let match;
-
-    while ((match = textRegex.exec(captionXml)) !== null) {
-        const start = parseFloat(match[1]);
-        const duration = parseFloat(match[2]);
-        // HTML 엔티티 디코딩
-        const text = match[3]
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/\n/g, ' ')
-            .trim();
-
-        if (text) {
-            segments.push({ start, duration, text });
-        }
-    }
-
-    const fullText = segments.map(s => s.text).join(' ');
-
-    return {
+    return res.status(200).json({
         videoId,
-        language: targetTrack.languageCode || lang,
-        languageName: targetTrack.name?.simpleText || targetTrack.languageCode,
+        language,
         segments,
         fullText,
-        isAutoGenerated: targetTrack.kind === 'asr',
-    };
+        segmentCount: segments.length,
+    });
 }

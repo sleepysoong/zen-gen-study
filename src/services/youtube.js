@@ -69,30 +69,30 @@ export async function getVideoInfo(videoId) {
  */
 export async function getTranscript(videoId, lang = 'ko') {
   try {
-    // 1. Vercel API 사용 시도 (배포 환경)
+    // Vercel API 사용
     const apiResponse = await fetch(`/api/transcript?videoId=${videoId}&lang=${lang}`);
 
     if (apiResponse.ok) {
       const data = await apiResponse.json();
-      if (data.fullText) {
+
+      if (data.fullText && data.fullText.trim()) {
+        console.log(`자막 가져오기 성공: ${data.segmentCount}개 세그먼트, 언어: ${data.language}`);
         return data;
       }
+
+      // API는 성공했지만 자막이 비어있는 경우
+      if (data.error) {
+        console.warn('자막 API 오류:', data.error);
+      }
+    } else {
+      const errorData = await apiResponse.json().catch(() => ({}));
+      console.warn('자막 API 응답 실패:', apiResponse.status, errorData.error);
     }
   } catch (e) {
-    console.log('API route not available, trying alternative methods...');
+    console.warn('자막 API 호출 실패:', e.message);
   }
 
-  try {
-    // 2. 무료 외부 API 서비스 사용
-    const transcript = await fetchFromExternalAPI(videoId, lang);
-    if (transcript.fullText) {
-      return transcript;
-    }
-  } catch (e) {
-    console.log('External API failed:', e.message);
-  }
-
-  // 3. 모든 방법 실패 시 빈 데이터 반환 (사용자가 직접 입력)
+  // API 실패 시 빈 데이터 반환 (사용자가 직접 입력 가능하도록)
   return {
     videoId,
     language: lang,
@@ -100,60 +100,6 @@ export async function getTranscript(videoId, lang = 'ko') {
     fullText: '',
     error: '자막을 자동으로 가져올 수 없습니다. 영상 내용을 직접 입력해주세요.'
   };
-}
-
-/**
- * 외부 무료 API를 통한 자막 가져오기
- */
-async function fetchFromExternalAPI(videoId, lang) {
-  // Youtubetranscript.com API (무료, CORS 지원)
-  const apiUrl = `https://youtubetranscript.com/?server_vid2=${videoId}`;
-
-  try {
-    const response = await fetch(apiUrl);
-    if (!response.ok) {
-      throw new Error('API 요청 실패');
-    }
-
-    const text = await response.text();
-
-    // XML 파싱
-    const segments = [];
-    const textRegex = /<text start="([^"]+)" dur="([^"]+)"[^>]*>([^<]*)<\/text>/g;
-    let match;
-
-    while ((match = textRegex.exec(text)) !== null) {
-      const start = parseFloat(match[1]);
-      const duration = parseFloat(match[2]);
-      const content = match[3]
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/\n/g, ' ')
-        .trim();
-
-      if (content) {
-        segments.push({ start, duration, text: content });
-      }
-    }
-
-    const fullText = segments.map(s => s.text).join(' ');
-
-    if (!fullText) {
-      throw new Error('자막 내용이 비어있습니다');
-    }
-
-    return {
-      videoId,
-      language: lang,
-      segments,
-      fullText,
-    };
-  } catch (error) {
-    throw new Error(`외부 API 실패: ${error.message}`);
-  }
 }
 
 /**
