@@ -1,0 +1,108 @@
+.chat-message {
+    display: flex;
+    gap: var(--space-3);
+    max-width: 85%;
+}
+
+.chat-message--user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.chat-message--assistant {
+    align-self: flex-start;
+}
+
+.chat-message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.chat-message--user .chat-message-avatar {
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+.chat-message--assistant .chat-message-avatar {
+    background: var(--color-accent);
+    color: var(--color-text-inverse);
+}
+
+.chat-message-content {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+}
+
+.chat-message--user .chat-message-content {
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+.chat-message--assistant .chat-message-content {
+    background: var(--color-cream-dark);
+    color: var(--color-text-primary);
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+.chat-message-text {
+    margin: 0;
+    line-height: var(--line-height-relaxed);
+    white-space: pre-wrap;
+}
+
+.chat-message-markdown {
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-relaxed);
+}
+
+.chat-message-markdown .markdown-content h1,
+.chat-message-markdown .markdown-content h2,
+.chat-message-markdown .markdown-content h3 {
+    margin-top: var(--space-4);
+}
+
+.chat-message-markdown .markdown-content h1:first-child,
+.chat-message-markdown .markdown-content h2:first-child,
+.chat-message-markdown .markdown-content h3:first-child {
+    margin-top: 0;
+}
+
+/* Streaming Cursor */
+.chat-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--color-primary);
+    margin-left: 2px;
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .chat-message {
+        max-width: 90%;
+    }
+
+    .chat-message-avatar {
+        width: 28px;
+        height: 28px;
+    }
+}

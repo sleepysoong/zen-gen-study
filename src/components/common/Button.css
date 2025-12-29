@@ -1,0 +1,115 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    cursor: pointer;
+    border: none;
+    white-space: nowrap;
+    position: relative;
+}
+
+.button:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+}
+
+/* Variants */
+.button--primary {
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+.button--primary:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+}
+
+.button--secondary {
+    background: var(--color-cream-dark);
+    color: var(--color-text-primary);
+}
+
+.button--secondary:hover:not(:disabled) {
+    background: var(--color-border);
+}
+
+.button--accent {
+    background: var(--color-accent);
+    color: var(--color-text-inverse);
+}
+
+.button--accent:hover:not(:disabled) {
+    background: var(--color-accent-dark);
+}
+
+.button--ghost {
+    background: transparent;
+    color: var(--color-text-secondary);
+}
+
+.button--ghost:hover:not(:disabled) {
+    background: var(--color-cream-dark);
+    color: var(--color-text-primary);
+}
+
+.button--danger {
+    background: var(--color-error);
+    color: var(--color-text-inverse);
+}
+
+.button--danger:hover:not(:disabled) {
+    background: #A33527;
+}
+
+/* Sizes */
+.button--sm {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+}
+
+.button--md {
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--font-size-base);
+}
+
+.button--lg {
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--font-size-lg);
+}
+
+/* States */
+.button--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button--full-width {
+    width: 100%;
+}
+
+.button--loading {
+    cursor: wait;
+}
+
+.button__content--hidden {
+    visibility: hidden;
+}
+
+.button__spinner {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: button-spin 0.8s linear infinite;
+}
+
+@keyframes button-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
