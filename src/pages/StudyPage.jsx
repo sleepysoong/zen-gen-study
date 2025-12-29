@@ -226,6 +226,7 @@ export function StudyPage() {
                             quizzes={quizzes}
                             loading={generating}
                             onGenerate={() => handleGenerate('quiz')}
+                            videoTitle={videoInfo?.title}
                         />
                     )}
 

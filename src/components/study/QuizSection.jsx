@@ -1,170 +1,222 @@
 /**
- * QuizSection - 퀴즈 컴포넌트
+ * QuizSection - 퀴즈 섹션 컴포넌트
+ * O/X, 선택형, 단답형 문제 지원
+ * PDF 다운로드 기능 포함
  */
 import { useState } from 'react';
 import { Button } from '../common/Button';
-import { Input } from '../common/Input';
 import { MarkdownRenderer } from '../common/MarkdownRenderer';
+import { generateQuizPDF } from '../../utils/pdfGenerator';
 import './QuizSection.css';
 
-export function QuizSection({ quizzes, loading, onGenerate }) {
+export function QuizSection({ quizzes, loading, onGenerate, videoTitle }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState({});
     const [showResults, setShowResults] = useState({});
     const [shortAnswers, setShortAnswers] = useState({});
+    const [pdfLoading, setPdfLoading] = useState(false);
 
     if (!quizzes || quizzes.length === 0) {
         return (
             <div className="quiz-section">
                 <div className="quiz-empty">
-                    <h3 className="quiz-empty-title">퀴즈로 복습해보세요</h3>
+                    <h3 className="quiz-empty-title">퀴즈</h3>
                     <p className="quiz-empty-description">
-                        영상 내용을 기반으로 O/X 문제와 단답형 문제를 생성해요.
+                        학습 내용을 바탕으로 O/X, 선택형, 단답형 퀴즈를 생성해요.
                     </p>
                     <Button
                         variant="primary"
                         loading={loading}
                         onClick={onGenerate}
                     >
-                        퀴즈 생성하기
+                        퀴즈 생성
                     </Button>
                 </div>
             </div>
         );
     }
 
-    const quiz = quizzes[currentIndex];
-    const isOX = quiz.type === 'ox';
-    const isAnswered = answers[currentIndex] !== undefined || showResults[currentIndex];
+    const currentQuiz = quizzes[currentIndex];
+    const isAnswered = showResults[currentIndex];
 
     const handleOXAnswer = (answer) => {
         setAnswers({ ...answers, [currentIndex]: answer });
         setShowResults({ ...showResults, [currentIndex]: true });
     };
 
-    const handleShortAnswer = () => {
+    const handleChoiceAnswer = (optionIndex) => {
+        setAnswers({ ...answers, [currentIndex]: optionIndex });
         setShowResults({ ...showResults, [currentIndex]: true });
     };
 
-    const isCorrect = () => {
-        if (isOX) {
-            return answers[currentIndex] === quiz.answer;
+    const handleShortSubmit = () => {
+        const userAnswer = shortAnswers[currentIndex]?.trim();
+        if (userAnswer) {
+            setAnswers({ ...answers, [currentIndex]: userAnswer });
+            setShowResults({ ...showResults, [currentIndex]: true });
         }
-        // 단답형은 정확한 일치 또는 포함 여부로 판단
-        const userAnswer = (shortAnswers[currentIndex] || '').trim().toLowerCase();
-        const correctAnswer = quiz.answer.toLowerCase();
-        return userAnswer === correctAnswer || correctAnswer.includes(userAnswer);
     };
 
-    const goToNext = () => {
+    const handleNext = () => {
         if (currentIndex < quizzes.length - 1) {
             setCurrentIndex(currentIndex + 1);
         }
     };
 
-    const goToPrev = () => {
+    const handlePrev = () => {
         if (currentIndex > 0) {
             setCurrentIndex(currentIndex - 1);
         }
     };
 
-    const resetQuiz = () => {
+    const handleRegenerate = () => {
         setCurrentIndex(0);
         setAnswers({});
         setShowResults({});
         setShortAnswers({});
+        onGenerate();
+    };
+
+    const handleDownloadPDF = async () => {
+        setPdfLoading(true);
+        try {
+            await generateQuizPDF(quizzes, videoTitle || '학습 퀴즈');
+        } catch (error) {
+            console.error('PDF 생성 실패:', error);
+            alert('PDF 생성에 실패했습니다.');
+        } finally {
+            setPdfLoading(false);
+        }
+    };
+
+    const isCorrect = () => {
+        const userAnswer = answers[currentIndex];
+        if (currentQuiz.type === 'ox') {
+            return userAnswer === currentQuiz.answer;
+        } else if (currentQuiz.type === 'choice') {
+            return userAnswer === currentQuiz.answer;
+        } else if (currentQuiz.type === 'short') {
+            const correctAnswer = currentQuiz.answer.toLowerCase().trim();
+            const userInput = (userAnswer || '').toLowerCase().trim();
+            return correctAnswer === userInput || correctAnswer.includes(userInput) || userInput.includes(correctAnswer);
+        }
+        return false;
+    };
+
+    const getTypeLabel = (type) => {
+        switch (type) {
+            case 'ox': return 'O/X';
+            case 'choice': return '선택형';
+            case 'short': return '단답형';
+            default: return '';
+        }
     };
 
     return (
         <div className="quiz-section">
-            {/* 진행률 표시 */}
-            <div className="quiz-progress">
-                <div className="quiz-progress-bar">
-                    <div
-                        className="quiz-progress-fill"
-                        style={{ width: `${((currentIndex + 1) / quizzes.length) * 100}%` }}
-                    />
+            {/* 헤더 */}
+            <div className="quiz-header">
+                <div className="quiz-progress">
+                    <span className="quiz-progress-current">{currentIndex + 1}</span>
+                    <span className="quiz-progress-divider">/</span>
+                    <span className="quiz-progress-total">{quizzes.length}</span>
                 </div>
-                <span className="quiz-progress-text">
-                    {currentIndex + 1} / {quizzes.length}
-                </span>
+                <div className="quiz-header-actions">
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={pdfLoading}
+                        onClick={handleDownloadPDF}
+                    >
+                        PDF 다운로드
+                    </Button>
+                </div>
             </div>
 
             {/* 퀴즈 카드 */}
             <div className="quiz-card">
-                <div className="quiz-type-badge">
-                    {isOX ? 'O/X 문제' : '단답형 문제'}
-                </div>
+                <div className="quiz-type-badge">{getTypeLabel(currentQuiz.type)}</div>
 
                 <div className="quiz-question">
-                    <MarkdownRenderer content={quiz.question} />
+                    <MarkdownRenderer content={currentQuiz.question} />
                 </div>
 
-                {/* O/X 답변 버튼 */}
-                {isOX && (
+                {/* O/X 문제 */}
+                {currentQuiz.type === 'ox' && !isAnswered && (
                     <div className="quiz-ox-buttons">
                         <button
-                            className={`quiz-ox-btn quiz-ox-btn--o ${answers[currentIndex] === true ? 'quiz-ox-btn--selected' : ''
-                                } ${showResults[currentIndex] && quiz.answer === true ? 'quiz-ox-btn--correct' : ''
-                                } ${showResults[currentIndex] && answers[currentIndex] === true && quiz.answer !== true ? 'quiz-ox-btn--wrong' : ''
-                                }`}
+                            className="quiz-ox-btn quiz-ox-btn--o"
                             onClick={() => handleOXAnswer(true)}
-                            disabled={isAnswered}
                         >
                             O
                         </button>
                         <button
-                            className={`quiz-ox-btn quiz-ox-btn--x ${answers[currentIndex] === false ? 'quiz-ox-btn--selected' : ''
-                                } ${showResults[currentIndex] && quiz.answer === false ? 'quiz-ox-btn--correct' : ''
-                                } ${showResults[currentIndex] && answers[currentIndex] === false && quiz.answer !== false ? 'quiz-ox-btn--wrong' : ''
-                                }`}
+                            className="quiz-ox-btn quiz-ox-btn--x"
                             onClick={() => handleOXAnswer(false)}
-                            disabled={isAnswered}
                         >
                             X
                         </button>
                     </div>
                 )}
 
-                {/* 단답형 입력 */}
-                {!isOX && (
-                    <div className="quiz-short-answer">
-                        <Input
-                            value={shortAnswers[currentIndex] || ''}
-                            onChange={(e) => setShortAnswers({ ...shortAnswers, [currentIndex]: e.target.value })}
-                            placeholder="답을 입력하세요"
-                            disabled={showResults[currentIndex]}
-                        />
-                        {!showResults[currentIndex] && (
-                            <Button
-                                variant="primary"
-                                onClick={handleShortAnswer}
-                                disabled={!shortAnswers[currentIndex]?.trim()}
+                {/* 선택형 문제 */}
+                {currentQuiz.type === 'choice' && currentQuiz.options && (
+                    <div className="quiz-choices">
+                        {currentQuiz.options.map((option, idx) => (
+                            <button
+                                key={idx}
+                                className={`quiz-choice-btn ${isAnswered
+                                        ? idx === currentQuiz.answer
+                                            ? 'quiz-choice-btn--correct'
+                                            : answers[currentIndex] === idx
+                                                ? 'quiz-choice-btn--wrong'
+                                                : ''
+                                        : ''
+                                    }`}
+                                onClick={() => !isAnswered && handleChoiceAnswer(idx)}
+                                disabled={isAnswered}
                             >
-                                확인
-                            </Button>
-                        )}
+                                <span className="quiz-choice-number">{idx + 1}</span>
+                                <span className="quiz-choice-text">
+                                    <MarkdownRenderer content={option} />
+                                </span>
+                            </button>
+                        ))}
                     </div>
                 )}
 
-                {/* 결과 및 해설 */}
-                {showResults[currentIndex] && (
+                {/* 단답형 문제 */}
+                {currentQuiz.type === 'short' && !isAnswered && (
+                    <div className="quiz-short-input">
+                        <input
+                            type="text"
+                            value={shortAnswers[currentIndex] || ''}
+                            onChange={(e) => setShortAnswers({ ...shortAnswers, [currentIndex]: e.target.value })}
+                            placeholder="답을 입력하세요"
+                            onKeyDown={(e) => e.key === 'Enter' && handleShortSubmit()}
+                        />
+                        <Button variant="primary" size="sm" onClick={handleShortSubmit}>
+                            제출
+                        </Button>
+                    </div>
+                )}
+
+                {/* 결과 표시 */}
+                {isAnswered && (
                     <div className={`quiz-result ${isCorrect() ? 'quiz-result--correct' : 'quiz-result--wrong'}`}>
                         <div className="quiz-result-header">
-                            <span className="quiz-result-icon">
-                                {isCorrect() ? '정답이에요!' : '틀렸어요'}
+                            <span className="quiz-result-icon">{isCorrect() ? '정답' : '오답'}</span>
+                            <span className="quiz-result-answer">
+                                정답: {currentQuiz.type === 'ox'
+                                    ? (currentQuiz.answer ? 'O' : 'X')
+                                    : currentQuiz.type === 'choice'
+                                        ? `${currentQuiz.answer + 1}번`
+                                        : currentQuiz.answer}
                             </span>
-                            {!isOX && (
-                                <span className="quiz-result-answer">
-                                    정답: {quiz.answer}
-                                </span>
-                            )}
                         </div>
-                        {quiz.explanation && (
-                            <div className="quiz-explanation">
-                                <MarkdownRenderer content={quiz.explanation} />
-                            </div>
-                        )}
+                        <div className="quiz-result-explanation">
+                            <MarkdownRenderer content={currentQuiz.explanation} />
+                        </div>
                     </div>
                 )}
             </div>
@@ -173,33 +225,27 @@ export function QuizSection({ quizzes, loading, onGenerate }) {
             <div className="quiz-nav">
                 <Button
                     variant="ghost"
-                    onClick={goToPrev}
                     disabled={currentIndex === 0}
+                    onClick={handlePrev}
                 >
                     이전
                 </Button>
                 <Button
                     variant="ghost"
-                    onClick={resetQuiz}
-                >
-                    처음부터
-                </Button>
-                <Button
-                    variant="ghost"
-                    onClick={goToNext}
                     disabled={currentIndex === quizzes.length - 1}
+                    onClick={handleNext}
                 >
                     다음
                 </Button>
             </div>
 
-            {/* 다시 생성 버튼 */}
+            {/* 다시 생성 */}
             <div className="quiz-regenerate">
                 <Button
                     variant="secondary"
                     size="sm"
                     loading={loading}
-                    onClick={onGenerate}
+                    onClick={handleRegenerate}
                 >
                     새로운 퀴즈 생성
                 </Button>
