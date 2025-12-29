@@ -127,10 +127,18 @@
     margin: var(--space-6) 0;
 }
 
+.markdown-content .table-wrapper {
+    overflow-x: auto;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
 .markdown-content table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: var(--space-4);
+    margin: 0;
+    font-size: var(--font-size-sm);
 }
 
 .markdown-content th,
@@ -138,11 +146,21 @@
     border: 1px solid var(--color-border);
     padding: var(--space-3);
     text-align: left;
+    vertical-align: top;
 }
 
 .markdown-content th {
     background: var(--color-cream-dark);
     font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+}
+
+.markdown-content tr:nth-child(even) {
+    background: rgba(139, 115, 85, 0.03);
+}
+
+.markdown-content tr:hover {
+    background: rgba(139, 115, 85, 0.08);
 }
 
 /* KaTeX 스타일 오버라이드 */

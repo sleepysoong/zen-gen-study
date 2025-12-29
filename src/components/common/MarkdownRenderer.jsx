@@ -1,10 +1,11 @@
 /**
  * MarkdownRenderer 컴포넌트
- * - 마크다운 렌더링
+ * - 마크다운 렌더링 (표, 취소선, 자동 링크 등 GFM 지원)
  * - LaTeX 수식 지원
  */
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import './MarkdownRenderer.css';
@@ -15,7 +16,7 @@ export function MarkdownRenderer({ content, className = '' }) {
     return (
         <div className={`markdown-content ${className}`}>
             <ReactMarkdown
-                remarkPlugins={[remarkMath]}
+                remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
                     // 코드 블록 커스텀
@@ -46,9 +47,13 @@ export function MarkdownRenderer({ content, className = '' }) {
                             </a>
                         );
                     },
-                    // 하이라이트된 텍스트 (==text== 형식 지원 안됨, 대신 **text** 사용)
-                    strong({ node, children, ...props }) {
-                        return <strong {...props}>{children}</strong>;
+                    // 표 스타일링
+                    table({ node, children, ...props }) {
+                        return (
+                            <div className="table-wrapper">
+                                <table {...props}>{children}</table>
+                            </div>
+                        );
                     }
                 }}
             >
