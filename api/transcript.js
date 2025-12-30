@@ -1,12 +1,19 @@
 /**
  * YouTube 자막 추출 API
- * Innertube API + JSON3 형식 사용
+ * CORS 프록시를 사용하여 YouTube Innertube API 호출
  */
+
+// 무료 CORS 프록시 목록 (백업용)
+const CORS_PROXIES = [
+    '', // 직접 시도 (프록시 없이)
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url=',
+];
 
 const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player';
 const DEFAULT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 
-// ANDROID 클라이언트 사용 (Vercel에서도 잘 작동)
+// ANDROID 클라이언트 사용
 const INNERTUBE_CONTEXT = {
     client: {
         clientName: 'ANDROID',
@@ -36,23 +43,32 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid video ID format' });
     }
 
-    try {
-        const transcript = await fetchTranscript(videoId, lang);
-        return res.status(200).json(transcript);
-    } catch (error) {
-        console.error('Transcript error:', error.message);
-        return res.status(500).json({
-            error: error.message || '자막을 가져올 수 없습니다.',
-            videoId,
-        });
+    // 여러 프록시 시도
+    for (let i = 0; i < CORS_PROXIES.length; i++) {
+        try {
+            const proxy = CORS_PROXIES[i];
+            console.log(`[Attempt ${i + 1}] Using proxy: ${proxy || 'direct'}`);
+
+            const transcript = await fetchTranscript(videoId, lang, proxy);
+            return res.status(200).json(transcript);
+        } catch (error) {
+            console.error(`[Attempt ${i + 1}] Failed:`, error.message);
+            // 다음 프록시 시도
+        }
     }
+
+    return res.status(500).json({
+        error: '자막을 가져올 수 없습니다. 이 영상에 자막이 없거나 YouTube가 접근을 차단했습니다.',
+        videoId,
+    });
 }
 
-async function fetchTranscript(videoId, preferredLang) {
-    // Step 1: Innertube API 호출
+async function fetchTranscript(videoId, preferredLang, proxyPrefix = '') {
+    // Innertube API 호출
     const apiUrl = `${INNERTUBE_API_URL}?key=${DEFAULT_API_KEY}`;
+    const targetUrl = proxyPrefix ? `${proxyPrefix}${encodeURIComponent(apiUrl)}` : apiUrl;
 
-    const response = await fetch(apiUrl, {
+    const response = await fetch(targetUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -64,7 +80,7 @@ async function fetchTranscript(videoId, preferredLang) {
     });
 
     if (!response.ok) {
-        throw new Error('YouTube API 요청 실패');
+        throw new Error(`API 요청 실패: ${response.status}`);
     }
 
     const data = await response.json();
@@ -74,8 +90,8 @@ async function fetchTranscript(videoId, preferredLang) {
     const reason = data.playabilityStatus?.reason;
 
     if (status === 'LOGIN_REQUIRED') {
-        if (reason && (reason.includes('bot') || reason.includes('Sign in'))) {
-            throw new Error('YouTube가 봇을 감지했습니다. 잠시 후 다시 시도해주세요.');
+        if (reason && (reason.includes('bot') || reason.includes('Sign in') || reason.includes('봇'))) {
+            throw new Error('YouTube가 봇을 감지했습니다.');
         }
         throw new Error(reason || '로그인이 필요합니다.');
     }
@@ -95,19 +111,22 @@ async function fetchTranscript(videoId, preferredLang) {
         throw new Error('이 영상에는 사용 가능한 자막이 없습니다.');
     }
 
-    // Step 2: 자막 트랙 선택 (우선순위에 따라)
+    // 자막 트랙 선택
     const targetTrack = selectTrack(captionTracks, preferredLang);
 
-    // Step 3: 자막 데이터 가져오기 (JSON3 형식)
+    // 자막 데이터 가져오기 (JSON3 형식)
     let transcriptUrl = targetTrack.baseUrl;
     transcriptUrl = transcriptUrl.replace('&fmt=srv3', '&fmt=json3');
-
-    // fmt 파라미터가 없으면 추가
     if (!transcriptUrl.includes('fmt=')) {
         transcriptUrl += '&fmt=json3';
     }
 
-    const transcriptResponse = await fetch(transcriptUrl);
+    // 자막 URL도 프록시 사용
+    const transcriptTargetUrl = proxyPrefix
+        ? `${proxyPrefix}${encodeURIComponent(transcriptUrl)}`
+        : transcriptUrl;
+
+    const transcriptResponse = await fetch(transcriptTargetUrl);
 
     if (!transcriptResponse.ok) {
         throw new Error('자막 데이터를 가져올 수 없습니다.');
@@ -115,14 +134,12 @@ async function fetchTranscript(videoId, preferredLang) {
 
     const transcriptText = await transcriptResponse.text();
 
-    // Step 4: 파싱
+    // 파싱
     let segments;
     try {
-        // JSON3 형식 파싱
         const json = JSON.parse(transcriptText);
         segments = parseJson3(json);
-    } catch (e) {
-        // XML 형식 폴백
+    } catch {
         segments = parseSrv3Xml(transcriptText);
     }
 
@@ -134,12 +151,10 @@ async function fetchTranscript(videoId, preferredLang) {
 
     // 언어 이름 추출
     let languageName = targetTrack.languageCode;
-    if (targetTrack.name) {
-        if (targetTrack.name.runs && targetTrack.name.runs[0]) {
-            languageName = targetTrack.name.runs[0].text;
-        } else if (targetTrack.name.simpleText) {
-            languageName = targetTrack.name.simpleText;
-        }
+    if (targetTrack.name?.runs?.[0]) {
+        languageName = targetTrack.name.runs[0].text;
+    } else if (targetTrack.name?.simpleText) {
+        languageName = targetTrack.name.simpleText;
     }
 
     return {
@@ -153,16 +168,12 @@ async function fetchTranscript(videoId, preferredLang) {
     };
 }
 
-/**
- * 우선순위에 따라 자막 트랙 선택
- */
 function selectTrack(tracks, preferredLang) {
     const manualTracks = tracks.filter(t => t.kind !== 'asr');
     const generatedTracks = tracks.filter(t => t.kind === 'asr');
 
     const findTrack = (list, lang) => list.find(t => t.languageCode === lang);
 
-    // 우선순위: 수동(선호) > 자동(선호) > 수동(ko) > 자동(ko) > 수동(en) > 자동(en) > 첫번째
     let target = findTrack(manualTracks, preferredLang);
     if (!target) target = findTrack(generatedTracks, preferredLang);
     if (!target) target = findTrack(manualTracks, 'ko');
@@ -178,15 +189,10 @@ function selectTrack(tracks, preferredLang) {
     return target;
 }
 
-/**
- * JSON3 형식 파싱
- */
 function parseJson3(json) {
     const segments = [];
 
-    if (!json.events) {
-        return segments;
-    }
+    if (!json.events) return segments;
 
     for (const event of json.events) {
         if (event.segs) {
@@ -204,13 +210,9 @@ function parseJson3(json) {
     return segments;
 }
 
-/**
- * srv3 XML 형식 파싱
- */
 function parseSrv3Xml(xmlText) {
     const segments = [];
 
-    // <p t="시작ms" d="지속ms">...</p> 형식
     const pTagRegex = /<p\s+t="(\d+)"(?:\s+d="(\d+)")?[^>]*>([\s\S]*?)<\/p>/g;
     let match;
 
@@ -219,7 +221,6 @@ function parseSrv3Xml(xmlText) {
         const durationMs = parseInt(match[2] || '0');
         const content = match[3];
 
-        // <s> 태그 안의 텍스트 추출
         let text = '';
         const sTagRegex = /<s[^>]*>([^<]*)<\/s>/g;
         let sMatch;
@@ -227,7 +228,6 @@ function parseSrv3Xml(xmlText) {
             text += sMatch[1];
         }
 
-        // <s> 태그가 없으면 전체 내용
         if (!text) {
             text = content.replace(/<[^>]*>/g, '');
         }
@@ -242,7 +242,6 @@ function parseSrv3Xml(xmlText) {
         }
     }
 
-    // 레거시 <text> 형식 폴백
     if (segments.length === 0) {
         const textRegex = /<text\s+start="([^"]+)"(?:\s+dur="([^"]+)")?[^>]*>([\s\S]*?)<\/text>/g;
         while ((match = textRegex.exec(xmlText)) !== null) {
