@@ -1,23 +1,23 @@
 /**
  * YouTube 자막 추출 API
- * youtube-transcript-api 파이썬 라이브러리 방식을 참고하여 구현
- * ANDROID 클라이언트를 사용한 Innertube API
+ * Innertube API + JSON3 형식 사용
  */
 
-// Innertube API 설정 (파이썬 라이브러리와 동일)
-const WATCH_URL = 'https://www.youtube.com/watch?v={video_id}';
-const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?key={api_key}';
+const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player';
+const DEFAULT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 
-// ANDROID 클라이언트 사용 (WEB보다 자막을 더 잘 가져옴)
+// ANDROID 클라이언트 사용 (Vercel에서도 잘 작동)
 const INNERTUBE_CONTEXT = {
     client: {
         clientName: 'ANDROID',
-        clientVersion: '20.10.38',
+        clientVersion: '19.09.37',
+        androidSdkVersion: 30,
+        hl: 'ko',
+        gl: 'KR',
     }
 };
 
 export default async function handler(req, res) {
-    // CORS 헤더 설정
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -32,7 +32,6 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'videoId is required' });
     }
 
-    // videoId 유효성 검사
     if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
         return res.status(400).json({ error: 'Invalid video ID format' });
     }
@@ -41,7 +40,7 @@ export default async function handler(req, res) {
         const transcript = await fetchTranscript(videoId, lang);
         return res.status(200).json(transcript);
     } catch (error) {
-        console.error('Transcript fetch error:', error.message);
+        console.error('Transcript error:', error.message);
         return res.status(500).json({
             error: error.message || '자막을 가져올 수 없습니다.',
             videoId,
@@ -50,69 +49,82 @@ export default async function handler(req, res) {
 }
 
 async function fetchTranscript(videoId, preferredLang) {
-    // 1. YouTube 페이지에서 API 키 추출
-    const html = await fetchVideoHtml(videoId);
-    const apiKey = extractInnertubeApiKey(html, videoId);
+    // Step 1: Innertube API 호출
+    const apiUrl = `${INNERTUBE_API_URL}?key=${DEFAULT_API_KEY}`;
 
-    console.log('[DEBUG] API Key:', apiKey ? 'found' : 'using default');
-
-    // 2. Innertube API로 자막 정보 가져오기
-    const innertubeData = await fetchInnertubeData(videoId, apiKey);
-
-    // 디버그: 응답 구조 확인
-    console.log('[DEBUG] Playability status:', innertubeData.playabilityStatus?.status);
-    console.log('[DEBUG] Has captions:', !!innertubeData.captions);
-
-    const captionsJson = extractCaptionsJson(innertubeData, videoId);
-
-    // 3. 자막 트랙 찾기
-    const captionTracks = captionsJson.captionTracks || [];
-
-    console.log('[DEBUG] Caption tracks found:', captionTracks.length);
-    captionTracks.forEach((track, i) => {
-        console.log(`[DEBUG] Track ${i}:`, track.languageCode, track.kind || 'manual');
-    });
-
-    if (captionTracks.length === 0) {
-        throw new Error('이 영상에는 자막이 없습니다.');
-    }
-
-    // 우선순위: 선호 언어 > 한국어 > 영어 > 첫 번째
-    // 수동 자막 먼저, 그 다음 자동 생성 자막
-    const manualTracks = captionTracks.filter(t => t.kind !== 'asr');
-    const generatedTracks = captionTracks.filter(t => t.kind === 'asr');
-
-    let targetTrack = findTrack(manualTracks, preferredLang);
-    if (!targetTrack) targetTrack = findTrack(generatedTracks, preferredLang);
-    if (!targetTrack) targetTrack = findTrack(manualTracks, 'ko');
-    if (!targetTrack) targetTrack = findTrack(generatedTracks, 'ko');
-    if (!targetTrack) targetTrack = findTrack(manualTracks, 'en');
-    if (!targetTrack) targetTrack = findTrack(generatedTracks, 'en');
-    if (!targetTrack) targetTrack = captionTracks[0];
-
-    if (!targetTrack || !targetTrack.baseUrl) {
-        throw new Error('자막 URL을 찾을 수 없습니다.');
-    }
-
-    console.log('[DEBUG] Selected track:', targetTrack.languageCode, targetTrack.kind || 'manual');
-
-    // 4. 자막 데이터 가져오기
-    // fmt=srv3 제거하고 JSON 형식으로 요청 (XML보다 파싱 쉬움)
-    let transcriptUrl = targetTrack.baseUrl;
-    transcriptUrl = transcriptUrl.replace('&fmt=srv3', '');
-
-    const transcriptResponse = await fetch(transcriptUrl, {
+    const response = await fetch(apiUrl, {
+        method: 'POST',
         headers: {
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+            context: INNERTUBE_CONTEXT,
+            videoId: videoId,
+        }),
     });
+
+    if (!response.ok) {
+        throw new Error('YouTube API 요청 실패');
+    }
+
+    const data = await response.json();
+
+    // Playability 확인
+    const status = data.playabilityStatus?.status;
+    const reason = data.playabilityStatus?.reason;
+
+    if (status === 'LOGIN_REQUIRED') {
+        if (reason && (reason.includes('bot') || reason.includes('Sign in'))) {
+            throw new Error('YouTube가 봇을 감지했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        throw new Error(reason || '로그인이 필요합니다.');
+    }
+
+    if (status !== 'OK') {
+        throw new Error(reason || '영상을 재생할 수 없습니다.');
+    }
+
+    // 자막 트랙 확인
+    const captionsRenderer = data.captions?.playerCaptionsTracklistRenderer;
+    if (!captionsRenderer) {
+        throw new Error('이 영상에는 자막이 비활성화되어 있습니다.');
+    }
+
+    const captionTracks = captionsRenderer.captionTracks || [];
+    if (captionTracks.length === 0) {
+        throw new Error('이 영상에는 사용 가능한 자막이 없습니다.');
+    }
+
+    // Step 2: 자막 트랙 선택 (우선순위에 따라)
+    const targetTrack = selectTrack(captionTracks, preferredLang);
+
+    // Step 3: 자막 데이터 가져오기 (JSON3 형식)
+    let transcriptUrl = targetTrack.baseUrl;
+    transcriptUrl = transcriptUrl.replace('&fmt=srv3', '&fmt=json3');
+
+    // fmt 파라미터가 없으면 추가
+    if (!transcriptUrl.includes('fmt=')) {
+        transcriptUrl += '&fmt=json3';
+    }
+
+    const transcriptResponse = await fetch(transcriptUrl);
 
     if (!transcriptResponse.ok) {
         throw new Error('자막 데이터를 가져올 수 없습니다.');
     }
 
-    const transcriptXml = await transcriptResponse.text();
-    const segments = parseTranscriptXml(transcriptXml);
+    const transcriptText = await transcriptResponse.text();
+
+    // Step 4: 파싱
+    let segments;
+    try {
+        // JSON3 형식 파싱
+        const json = JSON.parse(transcriptText);
+        segments = parseJson3(json);
+    } catch (e) {
+        // XML 형식 폴백
+        segments = parseSrv3Xml(transcriptText);
+    }
 
     if (segments.length === 0) {
         throw new Error('자막 내용을 파싱할 수 없습니다.');
@@ -141,180 +153,106 @@ async function fetchTranscript(videoId, preferredLang) {
     };
 }
 
-function findTrack(tracks, langCode) {
-    return tracks.find(t => t.languageCode === langCode);
+/**
+ * 우선순위에 따라 자막 트랙 선택
+ */
+function selectTrack(tracks, preferredLang) {
+    const manualTracks = tracks.filter(t => t.kind !== 'asr');
+    const generatedTracks = tracks.filter(t => t.kind === 'asr');
+
+    const findTrack = (list, lang) => list.find(t => t.languageCode === lang);
+
+    // 우선순위: 수동(선호) > 자동(선호) > 수동(ko) > 자동(ko) > 수동(en) > 자동(en) > 첫번째
+    let target = findTrack(manualTracks, preferredLang);
+    if (!target) target = findTrack(generatedTracks, preferredLang);
+    if (!target) target = findTrack(manualTracks, 'ko');
+    if (!target) target = findTrack(generatedTracks, 'ko');
+    if (!target) target = findTrack(manualTracks, 'en');
+    if (!target) target = findTrack(generatedTracks, 'en');
+    if (!target) target = tracks[0];
+
+    if (!target || !target.baseUrl) {
+        throw new Error('자막 URL을 찾을 수 없습니다.');
+    }
+
+    return target;
 }
 
-async function fetchVideoHtml(videoId) {
-    const url = WATCH_URL.replace('{video_id}', videoId);
-    const response = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US',
-        },
-    });
-
-    if (!response.ok) {
-        throw new Error('YouTube 페이지를 가져올 수 없습니다.');
-    }
-
-    const html = await response.text();
-
-    // Consent cookie 처리 (유럽 지역)
-    if (html.includes('action="https://consent.youtube.com/s"')) {
-        console.log('[DEBUG] Consent page detected');
-        // consent cookie 없이도 API 요청은 가능
-    }
-
-    return html;
-}
-
-function extractInnertubeApiKey(html, videoId) {
-    // 메인 패턴
-    const pattern = /"INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)"/;
-    const match = html.match(pattern);
-
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    // 대체 패턴
-    const altPattern = /"innertubeApiKey":\s*"([a-zA-Z0-9_-]+)"/;
-    const altMatch = html.match(altPattern);
-
-    if (altMatch && altMatch[1]) {
-        return altMatch[1];
-    }
-
-    // IP 차단 확인
-    if (html.includes('class="g-recaptcha"')) {
-        throw new Error('YouTube가 IP를 차단했습니다. 잠시 후 다시 시도해주세요.');
-    }
-
-    // 기본 API 키 (공개된 웹 클라이언트 키)
-    return 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-}
-
-async function fetchInnertubeData(videoId, apiKey) {
-    const url = INNERTUBE_API_URL.replace('{api_key}', apiKey);
-
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            context: INNERTUBE_CONTEXT,
-            videoId: videoId,
-        }),
-    });
-
-    if (!response.ok) {
-        const text = await response.text();
-        console.error('[DEBUG] Innertube API error:', response.status, text.substring(0, 200));
-        throw new Error('Innertube API 요청 실패');
-    }
-
-    return await response.json();
-}
-
-function extractCaptionsJson(innertubeData, videoId) {
-    // Playability 상태 확인
-    const playabilityStatus = innertubeData.playabilityStatus;
-    if (playabilityStatus) {
-        const status = playabilityStatus.status;
-        const reason = playabilityStatus.reason;
-
-        console.log('[DEBUG] Playability:', status, reason || '');
-
-        if (status === 'LOGIN_REQUIRED') {
-            if (reason && reason.includes('bot')) {
-                throw new Error('YouTube가 봇을 감지했습니다. 잠시 후 다시 시도해주세요.');
-            }
-            if (reason && reason.includes('age')) {
-                throw new Error('연령 제한이 있는 영상입니다.');
-            }
-        }
-
-        if (status === 'ERROR') {
-            throw new Error(reason || '영상을 재생할 수 없습니다.');
-        }
-
-        if (status !== 'OK' && status) {
-            throw new Error(reason || '영상을 재생할 수 없습니다.');
-        }
-    }
-
-    const captions = innertubeData.captions;
-    if (!captions) {
-        // 자막이 아예 없는 경우
-        throw new Error('이 영상에는 자막이 비활성화되어 있습니다.');
-    }
-
-    const captionsJson = captions.playerCaptionsTracklistRenderer;
-    if (!captionsJson || !captionsJson.captionTracks) {
-        throw new Error('이 영상에는 사용 가능한 자막이 없습니다.');
-    }
-
-    return captionsJson;
-}
-
-function parseTranscriptXml(xmlText) {
+/**
+ * JSON3 형식 파싱
+ */
+function parseJson3(json) {
     const segments = [];
 
-    // XML 파싱 - <text start="..." dur="...">...</text>
-    const textRegex = /<text start="([^"]+)"(?: dur="([^"]+)")?[^>]*>([^<]*(?:<[^>]+>[^<]*)*)<\/text>/g;
-    let match;
+    if (!json.events) {
+        return segments;
+    }
 
-    while ((match = textRegex.exec(xmlText)) !== null) {
-        const start = parseFloat(match[1]);
-        const duration = parseFloat(match[2] || '0');
-        let text = match[3];
-
-        // HTML 엔티티 디코딩 및 태그 제거
-        text = decodeHtmlEntities(text);
-        text = text.replace(/<[^>]*>/g, '').trim();
-
-        if (text) {
-            segments.push({ start, duration, text });
+    for (const event of json.events) {
+        if (event.segs) {
+            const text = event.segs.map(s => s.utf8 || '').join('').trim();
+            if (text) {
+                segments.push({
+                    start: (event.tStartMs || 0) / 1000,
+                    duration: (event.dDurationMs || 0) / 1000,
+                    text,
+                });
+            }
         }
     }
 
-    // 대체 파싱 (다른 형식)
-    if (segments.length === 0) {
-        const altRegex = /<p t="(\d+)" d="(\d+)"[^>]*>([^<]*(?:<[^>]+>[^<]*)*)<\/p>/g;
-        while ((match = altRegex.exec(xmlText)) !== null) {
-            const start = parseInt(match[1]) / 1000;
-            const duration = parseInt(match[2]) / 1000;
-            let text = decodeHtmlEntities(match[3]);
-            text = text.replace(/<[^>]*>/g, '').trim();
+    return segments;
+}
 
+/**
+ * srv3 XML 형식 파싱
+ */
+function parseSrv3Xml(xmlText) {
+    const segments = [];
+
+    // <p t="시작ms" d="지속ms">...</p> 형식
+    const pTagRegex = /<p\s+t="(\d+)"(?:\s+d="(\d+)")?[^>]*>([\s\S]*?)<\/p>/g;
+    let match;
+
+    while ((match = pTagRegex.exec(xmlText)) !== null) {
+        const startMs = parseInt(match[1]);
+        const durationMs = parseInt(match[2] || '0');
+        const content = match[3];
+
+        // <s> 태그 안의 텍스트 추출
+        let text = '';
+        const sTagRegex = /<s[^>]*>([^<]*)<\/s>/g;
+        let sMatch;
+        while ((sMatch = sTagRegex.exec(content)) !== null) {
+            text += sMatch[1];
+        }
+
+        // <s> 태그가 없으면 전체 내용
+        if (!text) {
+            text = content.replace(/<[^>]*>/g, '');
+        }
+
+        text = decodeHtmlEntities(text.trim());
+        if (text) {
+            segments.push({
+                start: startMs / 1000,
+                duration: durationMs / 1000,
+                text,
+            });
+        }
+    }
+
+    // 레거시 <text> 형식 폴백
+    if (segments.length === 0) {
+        const textRegex = /<text\s+start="([^"]+)"(?:\s+dur="([^"]+)")?[^>]*>([\s\S]*?)<\/text>/g;
+        while ((match = textRegex.exec(xmlText)) !== null) {
+            const start = parseFloat(match[1]);
+            const duration = parseFloat(match[2] || '0');
+            let text = match[3].replace(/<[^>]*>/g, '');
+            text = decodeHtmlEntities(text.trim());
             if (text) {
                 segments.push({ start, duration, text });
             }
-        }
-    }
-
-    // 마지막 대체 파싱 (JSON 형식일 수 있음)
-    if (segments.length === 0) {
-        try {
-            const json = JSON.parse(xmlText);
-            if (json.events) {
-                for (const event of json.events) {
-                    if (event.segs) {
-                        const text = event.segs.map(s => s.utf8).join('').trim();
-                        if (text) {
-                            segments.push({
-                                start: (event.tStartMs || 0) / 1000,
-                                duration: (event.dDurationMs || 0) / 1000,
-                                text,
-                            });
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            // JSON이 아님
         }
     }
 
