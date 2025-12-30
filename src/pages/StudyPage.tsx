@@ -1,6 +1,8 @@
 /**
- * StudyPage - 학습 콘텐츠 페이지
+ * StudyPage 컴포넌트
+ * 학습 콘텐츠를 표시하는 메인 페이지입니다.
  */
+
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/common/Button';
@@ -13,23 +15,42 @@ import { VideoPlayer } from '../components/video/VideoPlayer';
 import { getVideoInfo, getTranscript } from '../services/youtube';
 import { generateSummary, generateQuiz, generateThinkMore, generateRelated } from '../services/openrouter';
 import { getSettings, saveHistoryItem, getHistoryItem } from '../services/storage';
+import type { VideoInfo, Quiz, RelatedKeyword } from '../types';
 import './StudyPage.css';
+
+// ============================================
+// 상수
+// ============================================
 
 const TABS = [
     { id: 'summary', label: '핵심 정리' },
     { id: 'quiz', label: '퀴즈' },
     { id: 'related', label: '연관 내용' },
     { id: 'video', label: '영상 보기' },
-    { id: 'chat', label: '질문하기' }
-];
+    { id: 'chat', label: '질문하기' },
+] as const;
 
+type TabId = (typeof TABS)[number]['id'];
+
+interface LocationState {
+    videoInfo?: VideoInfo;
+}
+
+// ============================================
+// 컴포넌트
+// ============================================
+
+/**
+ * 학습 페이지 컴포넌트
+ */
 export function StudyPage() {
-    const { videoId } = useParams();
+    const { videoId } = useParams<{ videoId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
+    const state = location.state as LocationState | null;
 
-    const [activeTab, setActiveTab] = useState('summary');
-    const [videoInfo, setVideoInfo] = useState(location.state?.videoInfo || null);
+    const [activeTab, setActiveTab] = useState<TabId>('summary');
+    const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(state?.videoInfo || null);
     const [transcript, setTranscript] = useState('');
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -37,13 +58,15 @@ export function StudyPage() {
 
     // 생성된 콘텐츠
     const [summary, setSummary] = useState('');
-    const [quizzes, setQuizzes] = useState([]);
+    const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [thinkMore, setThinkMore] = useState('');
-    const [related, setRelated] = useState([]);
+    const [related, setRelated] = useState<RelatedKeyword[]>([]);
 
     // 초기 데이터 로드
     useEffect(() => {
         async function loadData() {
+            if (!videoId) return;
+
             try {
                 // 비디오 정보 가져오기
                 if (!videoInfo) {
@@ -77,22 +100,26 @@ export function StudyPage() {
     }, [videoId, videoInfo]);
 
     // 히스토리 저장
-    const saveToHistory = useCallback((updates) => {
-        saveHistoryItem({
-            videoId,
-            title: videoInfo?.title,
-            thumbnailUrl: videoInfo?.thumbnailUrl,
-            transcript,
-            summary,
-            quizzes,
-            thinkMore,
-            related,
-            ...updates
-        });
-    }, [videoId, videoInfo, transcript, summary, quizzes, thinkMore, related]);
+    const saveToHistory = useCallback(
+        (updates: Partial<{ summary: string; quizzes: Quiz[]; thinkMore: string; related: RelatedKeyword[] }>) => {
+            if (!videoId) return;
+            saveHistoryItem({
+                videoId,
+                title: videoInfo?.title,
+                thumbnailUrl: videoInfo?.thumbnailUrl,
+                transcript,
+                summary,
+                quizzes,
+                thinkMore,
+                related,
+                ...updates,
+            });
+        },
+        [videoId, videoInfo, transcript, summary, quizzes, thinkMore, related]
+    );
 
     // AI 콘텐츠 생성
-    const handleGenerate = async (type) => {
+    const handleGenerate = async (type: 'summary' | 'quiz' | 'thinkMore' | 'related') => {
         const settings = getSettings();
 
         if (!settings.apiKey) {
@@ -100,7 +127,6 @@ export function StudyPage() {
             return;
         }
 
-        // 자막이 없으면 사용자에게 입력 요청
         if (!transcript) {
             setError('자막을 불러올 수 없습니다. 영상 내용을 직접 입력해주세요.');
             return;
@@ -139,7 +165,7 @@ export function StudyPage() {
                 }
             }
         } catch (err) {
-            setError(err.message || 'AI 콘텐츠 생성에 실패했습니다.');
+            setError(err instanceof Error ? err.message : 'AI 콘텐츠 생성에 실패했습니다.');
         } finally {
             setGenerating(false);
         }
@@ -177,9 +203,7 @@ export function StudyPage() {
                     </button>
                     <div className="video-info">
                         <h1 className="video-title">{videoInfo?.title || '학습 중'}</h1>
-                        {videoInfo?.author && (
-                            <span className="video-author">{videoInfo.author}</span>
-                        )}
+                        {videoInfo?.author && <span className="video-author">{videoInfo.author}</span>}
                     </div>
                 </div>
             </div>
@@ -188,7 +212,9 @@ export function StudyPage() {
             {error && (
                 <div className="study-error">
                     <p>{error}</p>
-                    <Button variant="ghost" size="sm" onClick={() => setError('')}>닫기</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setError('')}>
+                        닫기
+                    </Button>
                 </div>
             )}
 
@@ -245,18 +271,12 @@ export function StudyPage() {
                         </>
                     )}
 
-                    {activeTab === 'video' && (
-                        <VideoPlayer
-                            videoId={videoId}
-                            transcript={transcript}
-                        />
+                    {activeTab === 'video' && videoId && (
+                        <VideoPlayer videoId={videoId} transcript={transcript} />
                     )}
 
-                    {activeTab === 'chat' && (
-                        <ChatWindow
-                            videoId={videoId}
-                            context={transcript}
-                        />
+                    {activeTab === 'chat' && videoId && (
+                        <ChatWindow videoId={videoId} context={transcript} />
                     )}
                 </div>
             </div>

@@ -1,16 +1,38 @@
 /**
  * OpenRouter AI 서비스
- * - AI 모델 호출
- * - 스트리밍 응답 지원
- * - 학습 콘텐츠 생성
+ * AI 모델 호출, 스트리밍 응답, 학습 콘텐츠 생성 기능을 제공합니다.
  */
+
+import type { ChatMessage, QuizResult, RelatedResult, StreamCallback } from '../types';
+
+// ============================================
+// 상수
+// ============================================
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+// ============================================
+// 타입 정의
+// ============================================
+
+interface OpenRouterCallOptions {
+    apiKey: string;
+    model?: string;
+    messages: ChatMessage[];
+    maxTokens?: number;
+    temperature?: number;
+    stream?: boolean;
+    onStream?: StreamCallback;
+}
+
+// ============================================
+// API 호출
+// ============================================
+
 /**
- * OpenRouter API 호출
- * @param {Object} options - API 호출 옵션
- * @returns {Promise<Object>} - AI 응답
+ * OpenRouter API를 호출합니다.
+ * @param options API 호출 옵션
+ * @returns AI 응답 텍스트
  */
 export async function callOpenRouter({
     apiKey,
@@ -19,17 +41,17 @@ export async function callOpenRouter({
     maxTokens = 4096,
     temperature = 0.7,
     stream = false,
-    onStream = null
-}) {
+    onStream,
+}: OpenRouterCallOptions): Promise<string> {
     if (!apiKey) {
         throw new Error('API 키가 설정되지 않았습니다. 설정에서 OpenRouter API 키를 입력해주세요.');
     }
 
-    const headers = {
-        'Authorization': `Bearer ${apiKey}`,
+    const headers: Record<string, string> = {
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': window.location.origin,
-        'X-Title': 'Zen Gen Study'
+        'X-Title': 'Zen Gen Study',
     };
 
     const body = {
@@ -37,14 +59,14 @@ export async function callOpenRouter({
         messages,
         max_tokens: maxTokens,
         temperature,
-        stream
+        stream,
     };
 
     try {
         const response = await fetch(OPENROUTER_API_URL, {
             method: 'POST',
             headers,
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
         });
 
         if (!response.ok) {
@@ -65,10 +87,15 @@ export async function callOpenRouter({
 }
 
 /**
- * 스트리밍 응답 처리
+ * 스트리밍 응답을 처리합니다.
  */
-async function handleStreamResponse(response, onStream) {
-    const reader = response.body.getReader();
+async function handleStreamResponse(
+    response: Response,
+    onStream: StreamCallback
+): Promise<string> {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('스트림을 읽을 수 없습니다.');
+
     const decoder = new TextDecoder();
     let fullContent = '';
 
@@ -92,7 +119,7 @@ async function handleStreamResponse(response, onStream) {
                             fullContent += content;
                             onStream(content, fullContent);
                         }
-                    } catch (e) {
+                    } catch {
                         // JSON 파싱 실패 무시
                     }
                 }
@@ -105,12 +132,10 @@ async function handleStreamResponse(response, onStream) {
     return fullContent;
 }
 
-/**
- * 학습 콘텐츠 생성을 위한 시스템 프롬프트
- * - 이모지 사용 자제
- * - 간단하고 명료하게
- * - 한국어로 응답
- */
+// ============================================
+// 시스템 프롬프트
+// ============================================
+
 const SYSTEM_PROMPTS = {
     summary: `당신은 교육 전문가입니다. 주어진 영상 내용의 핵심을 정리해주세요.
 
@@ -195,28 +220,42 @@ const SYSTEM_PROMPTS = {
 7. 확실하지 않은 내용은 그렇다고 말해주세요.
 
 [영상 내용]
-{context}`
-};
+{context}`,
+} as const;
+
+// ============================================
+// 콘텐츠 생성 함수
+// ============================================
 
 /**
- * 핵심 내용 요약 생성
+ * 핵심 내용 요약을 생성합니다.
  */
-export async function generateSummary(apiKey, model, transcript, maxTokens = 2048) {
+export async function generateSummary(
+    apiKey: string,
+    model: string,
+    transcript: string,
+    maxTokens = 2048
+): Promise<string> {
     return callOpenRouter({
         apiKey,
         model,
         maxTokens,
         messages: [
             { role: 'system', content: SYSTEM_PROMPTS.summary },
-            { role: 'user', content: `다음 영상 내용을 핵심 내용으로 정리해주세요:\n\n${transcript}` }
-        ]
+            { role: 'user', content: `다음 영상 내용을 핵심 내용으로 정리해주세요:\n\n${transcript}` },
+        ],
     });
 }
 
 /**
- * 퀴즈 생성
+ * 퀴즈를 생성합니다.
  */
-export async function generateQuiz(apiKey, model, transcript, maxTokens = 2048) {
+export async function generateQuiz(
+    apiKey: string,
+    model: string,
+    transcript: string,
+    maxTokens = 2048
+): Promise<QuizResult> {
     const response = await callOpenRouter({
         apiKey,
         model,
@@ -224,15 +263,15 @@ export async function generateQuiz(apiKey, model, transcript, maxTokens = 2048) 
         temperature: 0.5,
         messages: [
             { role: 'system', content: SYSTEM_PROMPTS.quiz },
-            { role: 'user', content: `다음 영상 내용을 기반으로 퀴즈를 생성해주세요:\n\n${transcript}` }
-        ]
+            { role: 'user', content: `다음 영상 내용을 기반으로 퀴즈를 생성해주세요:\n\n${transcript}` },
+        ],
     });
 
     try {
-        // JSON 블록 추출
-        const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/) ||
+        const jsonMatch =
+            response.match(/```json\n?([\s\S]*?)\n?```/) ||
             response.match(/\{[\s\S]*"quizzes"[\s\S]*\}/);
-        const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : response;
+        const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : response;
         return JSON.parse(jsonStr);
     } catch (error) {
         console.error('퀴즈 파싱 실패:', error);
@@ -241,24 +280,37 @@ export async function generateQuiz(apiKey, model, transcript, maxTokens = 2048) 
 }
 
 /**
- * 더 생각해볼 내용 생성
+ * 더 생각해볼 내용을 생성합니다.
  */
-export async function generateThinkMore(apiKey, model, transcript, maxTokens = 1024) {
+export async function generateThinkMore(
+    apiKey: string,
+    model: string,
+    transcript: string,
+    maxTokens = 1024
+): Promise<string> {
     return callOpenRouter({
         apiKey,
         model,
         maxTokens,
         messages: [
             { role: 'system', content: SYSTEM_PROMPTS.thinkMore },
-            { role: 'user', content: `다음 영상 내용을 기반으로 더 생각해볼 주제를 제안해주세요:\n\n${transcript}` }
-        ]
+            {
+                role: 'user',
+                content: `다음 영상 내용을 기반으로 더 생각해볼 주제를 제안해주세요:\n\n${transcript}`,
+            },
+        ],
     });
 }
 
 /**
- * 연관 내용 생성
+ * 연관 내용을 생성합니다.
  */
-export async function generateRelated(apiKey, model, transcript, maxTokens = 1024) {
+export async function generateRelated(
+    apiKey: string,
+    model: string,
+    transcript: string,
+    maxTokens = 1024
+): Promise<RelatedResult> {
     const response = await callOpenRouter({
         apiKey,
         model,
@@ -266,14 +318,18 @@ export async function generateRelated(apiKey, model, transcript, maxTokens = 102
         temperature: 0.5,
         messages: [
             { role: 'system', content: SYSTEM_PROMPTS.related },
-            { role: 'user', content: `다음 영상 내용과 연관된 개념을 추천해주세요:\n\n${transcript}` }
-        ]
+            {
+                role: 'user',
+                content: `다음 영상 내용과 연관된 개념을 추천해주세요:\n\n${transcript}`,
+            },
+        ],
     });
 
     try {
-        const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/) ||
+        const jsonMatch =
+            response.match(/```json\n?([\s\S]*?)\n?```/) ||
             response.match(/\{[\s\S]*"keywords"[\s\S]*\}/);
-        const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : response;
+        const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : response;
         return JSON.parse(jsonStr);
     } catch (error) {
         console.error('연관 내용 파싱 실패:', error);
@@ -281,8 +337,21 @@ export async function generateRelated(apiKey, model, transcript, maxTokens = 102
     }
 }
 
+// ============================================
+// 채팅 함수
+// ============================================
+
+interface ChatWithContextOptions {
+    apiKey: string;
+    model: string;
+    context: string;
+    messages: ChatMessage[];
+    maxTokens?: number;
+    onStream?: StreamCallback;
+}
+
 /**
- * 챗봇 응답 생성 (스트리밍)
+ * 컨텍스트 기반 채팅 응답을 생성합니다.
  */
 export async function chatWithContext({
     apiKey,
@@ -290,8 +359,8 @@ export async function chatWithContext({
     context,
     messages,
     maxTokens = 2048,
-    onStream
-}) {
+    onStream,
+}: ChatWithContextOptions): Promise<string> {
     const systemPrompt = SYSTEM_PROMPTS.chat.replace('{context}', context);
 
     return callOpenRouter({
@@ -300,9 +369,6 @@ export async function chatWithContext({
         maxTokens,
         stream: !!onStream,
         onStream,
-        messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages
-        ]
+        messages: [{ role: 'system', content: systemPrompt }, ...messages],
     });
 }
