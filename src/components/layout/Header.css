@@ -1,62 +1,78 @@
+/* Header.css */
 .header {
+    height: var(--header-height);
+    background-color: rgba(255, 254, 245, 0.85);
+    /* Cream with transparency */
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(224, 216, 204, 0.5);
     position: sticky;
     top: 0;
-    background: var(--color-bg-card);
-    border-bottom: 1px solid var(--color-border);
-    z-index: 50;
+    z-index: 100;
+    transition: var(--transition-base);
 }
 
-.header-container {
-    max-width: var(--container-max);
+.header-inner {
+    max-width: var(--container-max-width);
     margin: 0 auto;
-    padding: var(--space-4) var(--container-padding);
+    height: 100%;
+    padding: 0 var(--spacing-md);
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
 .header-logo {
-    text-decoration: none;
-}
-
-.header-logo-text {
-    font-size: var(--font-size-xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
-    letter-spacing: -0.03em;
-}
-
-.header-nav {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 10px;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--text-lg);
+    color: var(--color-primary);
+    transition: var(--transition-base);
+}
+
+.header-logo:hover {
+    opacity: 0.8;
+}
+
+.header-logo-icon {
+    width: 36px;
+    height: 36px;
+    background-color: var(--color-accent);
+    color: #fff;
+    border-radius: 10px;
+    /* Squircleish */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: serif;
+    /* For Zen feel */
+    font-size: 20px;
+    box-shadow: var(--shadow-sm);
 }
 
 .header-nav-link {
-    padding: var(--space-2) var(--space-4);
-    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-full);
+    color: var(--color-primary);
+    font-size: var(--text-sm);
     font-weight: var(--font-weight-medium);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
+    transition: var(--transition-base);
 }
 
 .header-nav-link:hover {
-    color: var(--color-text-primary);
-    background: var(--color-cream-dark);
+    background-color: var(--color-bg-sub);
+    color: var(--color-accent);
 }
 
-.header-nav-link--active {
-    color: var(--color-primary);
-    background: rgba(139, 115, 85, 0.1);
+.header-nav-link svg {
+    color: var(--color-primary-light);
+    transition: var(--transition-base);
 }
 
-@media (max-width: 480px) {
-    .header-logo-text {
-        font-size: var(--font-size-lg);
-    }
-
-    .header-nav-link {
-        padding: var(--space-2) var(--space-3);
-        font-size: var(--font-size-sm);
-    }
+.header-nav-link:hover svg {
+    color: var(--color-accent);
 }

@@ -1,114 +1,126 @@
-.button {
+/* Button.css */
+.btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
-    font-weight: var(--font-weight-medium);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
-    cursor: pointer;
-    border: none;
-    white-space: nowrap;
     position: relative;
+    border-radius: var(--radius-md);
+    font-weight: var(--font-weight-medium);
+    transition: var(--transition-base);
+    outline: none;
+    overflow: hidden;
+    user-select: none;
+    white-space: nowrap;
 }
 
-.button:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* Variants */
-.button--primary {
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
+.btn--primary {
+    background-color: var(--color-accent);
+    color: #FFFFFF;
+    box-shadow: var(--shadow-sm);
 }
 
-.button--primary:hover:not(:disabled) {
-    background: var(--color-primary-dark);
+.btn--primary:hover {
+    background-color: var(--color-accent-light);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
 }
 
-.button--secondary {
-    background: var(--color-cream-dark);
-    color: var(--color-text-primary);
+.btn--primary:active {
+    background-color: var(--color-accent-dark);
+    transform: translateY(0);
 }
 
-.button--secondary:hover:not(:disabled) {
-    background: var(--color-border);
+.btn--secondary {
+    background-color: var(--color-bg-paper);
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
 }
 
-.button--accent {
-    background: var(--color-accent);
-    color: var(--color-text-inverse);
+.btn--secondary:hover {
+    background-color: rgba(46, 125, 50, 0.05);
+    /* Green tint */
 }
 
-.button--accent:hover:not(:disabled) {
-    background: var(--color-accent-dark);
+.btn--accent {
+    background-color: var(--color-primary);
+    color: #FFFFFF;
 }
 
-.button--ghost {
-    background: transparent;
-    color: var(--color-text-secondary);
+.btn--ghost {
+    background-color: transparent;
+    color: var(--color-primary-light);
 }
 
-.button--ghost:hover:not(:disabled) {
-    background: var(--color-cream-dark);
-    color: var(--color-text-primary);
+.btn--ghost:hover {
+    background-color: rgba(93, 64, 55, 0.05);
+    /* Brown tint */
+    color: var(--color-primary);
 }
 
-.button--danger {
-    background: var(--color-error);
-    color: var(--color-text-inverse);
+.btn--danger {
+    background-color: var(--color-error);
+    color: #FFFFFF;
 }
 
-.button--danger:hover:not(:disabled) {
-    background: #A33527;
+.btn--danger:hover {
+    background-color: #B71C1C;
 }
 
 /* Sizes */
-.button--sm {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
+.btn--sm {
+    height: 32px;
+    padding: 0 12px;
+    font-size: var(--text-xs);
+    border-radius: var(--radius-sm);
 }
 
-.button--md {
-    padding: var(--space-3) var(--space-5);
-    font-size: var(--font-size-base);
+.btn--md {
+    height: 44px;
+    padding: 0 20px;
+    font-size: var(--text-sm);
+    border-radius: var(--radius-md);
 }
 
-.button--lg {
-    padding: var(--space-4) var(--space-8);
-    font-size: var(--font-size-lg);
+.btn--lg {
+    height: 52px;
+    padding: 0 32px;
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-bold);
+    border-radius: var(--radius-lg);
 }
 
-/* States */
-.button--disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.button--full-width {
+/* Full Width */
+.btn--full {
     width: 100%;
 }
 
-.button--loading {
-    cursor: wait;
+/* Loading Spinner */
+.btn--loading .btn-content {
+    opacity: 0;
 }
 
-.button__content--hidden {
-    visibility: hidden;
-}
-
-.button__spinner {
+.btn-spinner {
     position: absolute;
+    top: 50%;
+    left: 50%;
     width: 18px;
     height: 18px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
+    margin-top: -9px;
+    margin-left: -9px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
-    animation: button-spin 0.8s linear infinite;
+    border-top-color: currentColor;
+    animation: spin 0.8s linear infinite;
 }
 
-@keyframes button-spin {
+@keyframes spin {
     to {
         transform: rotate(360deg);
     }

@@ -1,87 +1,80 @@
+/* Modal.css */
 .modal-overlay {
     position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(93, 64, 55, 0.6);
+    /* Brown overlay */
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-4);
-    z-index: var(--z-modal);
-    animation: fadeIn var(--transition-fast) ease-out;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
 }
 
 .modal {
-    background: var(--color-bg-card);
+    background-color: var(--color-bg-paper);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-float);
+    width: 90%;
     max-height: 90vh;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
-    animation: slideUp var(--transition-normal) ease-out;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
 }
 
+/* Sizes */
 .modal--sm {
-    width: 100%;
     max-width: 400px;
 }
 
 .modal--md {
-    width: 100%;
-    max-width: 560px;
+    max-width: 600px;
 }
 
 .modal--lg {
-    width: 100%;
     max-width: 800px;
 }
 
-.modal--full {
-    width: 100%;
-    max-width: 100%;
-    height: 100%;
-    max-height: 100%;
-    border-radius: 0;
-}
-
 .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-4) var(--space-6);
-    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-bg-sub);
 }
 
 .modal-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary);
 }
 
 .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all var(--transition-fast);
+    color: var(--color-primary-light);
+    transition: var(--transition-base);
 }
 
 .modal-close:hover {
-    background: var(--color-cream-dark);
-    color: var(--color-text-primary);
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--color-primary);
 }
 
 .modal-content {
-    padding: var(--space-6);
+    padding: 24px;
     overflow-y: auto;
-    flex: 1;
+    color: var(--color-primary);
 }
 
 @keyframes fadeIn {

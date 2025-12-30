@@ -1,131 +1,81 @@
+/* ContentSummary.css */
 .content-summary {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: 30px;
 }
 
-/* Transcript Section */
-.transcript-section {
-    background: var(--color-bg-card);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-}
-
-.transcript-header {
+.summary-empty {
+    text-align: center;
+    padding: 60px 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    gap: 20px;
 }
 
-.transcript-toggle {
+.summary-empty-title {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary);
+}
+
+.summary-empty-description {
+    color: var(--color-primary-light);
+    margin-bottom: 10px;
+}
+
+.summary-empty-actions {
     display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-.transcript-toggle svg {
-    transition: transform var(--transition-fast);
-}
-
-.transcript-notice {
-    font-size: var(--font-size-sm);
-    color: var(--color-warning);
-}
-
-.transcript-content {
-    padding: var(--space-4);
-    background: var(--color-cream-dark);
-}
-
-.transcript-text {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: var(--line-height-relaxed);
-    white-space: pre-wrap;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.transcript-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-3);
-}
-
-/* Generate Section */
-.generate-section {
-    display: flex;
+    gap: 12px;
     justify-content: center;
 }
 
-.generate-card {
-    background: var(--color-bg-card);
-    border-radius: var(--radius-lg);
-    padding: var(--space-8);
-    text-align: center;
-    max-width: 480px;
-    width: 100%;
-    box-shadow: var(--shadow-md);
-}
-
-.generate-title {
-    font-size: var(--font-size-xl);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-    margin-bottom: var(--space-3);
-}
-
-.generate-description {
-    font-size: var(--font-size-base);
-    color: var(--color-text-secondary);
-    margin-bottom: var(--space-6);
-}
-
-.generate-buttons {
+.summary-transcript-toggle {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
+    justify-content: flex-end;
 }
 
-/* Summary Content */
-.summary-content {
-    background: var(--color-bg-card);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
+.summary-transcript {
+    animation: slideDown 0.3s ease-out;
 }
 
-.summary-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-4) var(--space-6);
-    border-bottom: 1px solid var(--color-border);
-}
-
-.summary-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-    margin: 0;
-}
-
-.summary-body {
-    padding: var(--space-6);
-}
-
-/* Responsive */
-@media (min-width: 480px) {
-    .generate-buttons {
-        flex-direction: row;
-        justify-content: center;
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
     }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.summary-content {
+    font-size: var(--text-base);
+    line-height: 1.8;
+    color: var(--color-primary);
+}
+
+.summary-content h1,
+.summary-content h2,
+.summary-content h3 {
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+    color: var(--color-primary-dark);
+}
+
+.summary-content strong {
+    color: var(--color-accent-dark);
+    font-weight: 600;
+    background: linear-gradient(180deg, transparent 60%, rgba(76, 175, 80, 0.2) 0);
+}
+
+.summary-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid var(--color-border);
 }
