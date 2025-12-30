@@ -1,18 +1,18 @@
 /**
  * YouTube 자막 추출 API
- * youtube-transcript-api 라이브러리 방식을 참고하여 구현
- * Innertube API 사용
+ * youtube-transcript-api 파이썬 라이브러리 방식을 참고하여 구현
+ * ANDROID 클라이언트를 사용한 Innertube API
  */
 
-// Innertube API 설정
-const WATCH_URL = 'https://www.youtube.com/watch?v=';
-const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?key=';
+// Innertube API 설정 (파이썬 라이브러리와 동일)
+const WATCH_URL = 'https://www.youtube.com/watch?v={video_id}';
+const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?key={api_key}';
+
+// ANDROID 클라이언트 사용 (WEB보다 자막을 더 잘 가져옴)
 const INNERTUBE_CONTEXT = {
     client: {
-        clientName: 'WEB',
-        clientVersion: '2.20240101.00.00',
-        hl: 'ko',
-        gl: 'KR',
+        clientName: 'ANDROID',
+        clientVersion: '20.10.38',
     }
 };
 
@@ -54,30 +54,58 @@ async function fetchTranscript(videoId, preferredLang) {
     const html = await fetchVideoHtml(videoId);
     const apiKey = extractInnertubeApiKey(html, videoId);
 
+    console.log('[DEBUG] API Key:', apiKey ? 'found' : 'using default');
+
     // 2. Innertube API로 자막 정보 가져오기
     const innertubeData = await fetchInnertubeData(videoId, apiKey);
+
+    // 디버그: 응답 구조 확인
+    console.log('[DEBUG] Playability status:', innertubeData.playabilityStatus?.status);
+    console.log('[DEBUG] Has captions:', !!innertubeData.captions);
+
     const captionsJson = extractCaptionsJson(innertubeData, videoId);
 
     // 3. 자막 트랙 찾기
     const captionTracks = captionsJson.captionTracks || [];
+
+    console.log('[DEBUG] Caption tracks found:', captionTracks.length);
+    captionTracks.forEach((track, i) => {
+        console.log(`[DEBUG] Track ${i}:`, track.languageCode, track.kind || 'manual');
+    });
 
     if (captionTracks.length === 0) {
         throw new Error('이 영상에는 자막이 없습니다.');
     }
 
     // 우선순위: 선호 언어 > 한국어 > 영어 > 첫 번째
-    let targetTrack = findTrack(captionTracks, preferredLang);
-    if (!targetTrack) targetTrack = findTrack(captionTracks, 'ko');
-    if (!targetTrack) targetTrack = findTrack(captionTracks, 'en');
+    // 수동 자막 먼저, 그 다음 자동 생성 자막
+    const manualTracks = captionTracks.filter(t => t.kind !== 'asr');
+    const generatedTracks = captionTracks.filter(t => t.kind === 'asr');
+
+    let targetTrack = findTrack(manualTracks, preferredLang);
+    if (!targetTrack) targetTrack = findTrack(generatedTracks, preferredLang);
+    if (!targetTrack) targetTrack = findTrack(manualTracks, 'ko');
+    if (!targetTrack) targetTrack = findTrack(generatedTracks, 'ko');
+    if (!targetTrack) targetTrack = findTrack(manualTracks, 'en');
+    if (!targetTrack) targetTrack = findTrack(generatedTracks, 'en');
     if (!targetTrack) targetTrack = captionTracks[0];
 
     if (!targetTrack || !targetTrack.baseUrl) {
         throw new Error('자막 URL을 찾을 수 없습니다.');
     }
 
+    console.log('[DEBUG] Selected track:', targetTrack.languageCode, targetTrack.kind || 'manual');
+
     // 4. 자막 데이터 가져오기
-    const transcriptUrl = targetTrack.baseUrl.replace('&fmt=srv3', '');
-    const transcriptResponse = await fetch(transcriptUrl);
+    // fmt=srv3 제거하고 JSON 형식으로 요청 (XML보다 파싱 쉬움)
+    let transcriptUrl = targetTrack.baseUrl;
+    transcriptUrl = transcriptUrl.replace('&fmt=srv3', '');
+
+    const transcriptResponse = await fetch(transcriptUrl, {
+        headers: {
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+    });
 
     if (!transcriptResponse.ok) {
         throw new Error('자막 데이터를 가져올 수 없습니다.');
@@ -91,9 +119,16 @@ async function fetchTranscript(videoId, preferredLang) {
     }
 
     const fullText = segments.map(s => s.text).join(' ');
-    const languageName = targetTrack.name?.runs?.[0]?.text ||
-        targetTrack.name?.simpleText ||
-        targetTrack.languageCode;
+
+    // 언어 이름 추출
+    let languageName = targetTrack.languageCode;
+    if (targetTrack.name) {
+        if (targetTrack.name.runs && targetTrack.name.runs[0]) {
+            languageName = targetTrack.name.runs[0].text;
+        } else if (targetTrack.name.simpleText) {
+            languageName = targetTrack.name.simpleText;
+        }
+    }
 
     return {
         videoId,
@@ -111,10 +146,11 @@ function findTrack(tracks, langCode) {
 }
 
 async function fetchVideoHtml(videoId) {
-    const response = await fetch(WATCH_URL + videoId, {
+    const url = WATCH_URL.replace('{video_id}', videoId);
+    const response = await fetch(url, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Language': 'en-US',
         },
     });
 
@@ -122,10 +158,19 @@ async function fetchVideoHtml(videoId) {
         throw new Error('YouTube 페이지를 가져올 수 없습니다.');
     }
 
-    return await response.text();
+    const html = await response.text();
+
+    // Consent cookie 처리 (유럽 지역)
+    if (html.includes('action="https://consent.youtube.com/s"')) {
+        console.log('[DEBUG] Consent page detected');
+        // consent cookie 없이도 API 요청은 가능
+    }
+
+    return html;
 }
 
 function extractInnertubeApiKey(html, videoId) {
+    // 메인 패턴
     const pattern = /"INNERTUBE_API_KEY":\s*"([a-zA-Z0-9_-]+)"/;
     const match = html.match(pattern);
 
@@ -141,16 +186,22 @@ function extractInnertubeApiKey(html, videoId) {
         return altMatch[1];
     }
 
+    // IP 차단 확인
+    if (html.includes('class="g-recaptcha"')) {
+        throw new Error('YouTube가 IP를 차단했습니다. 잠시 후 다시 시도해주세요.');
+    }
+
     // 기본 API 키 (공개된 웹 클라이언트 키)
     return 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 }
 
 async function fetchInnertubeData(videoId, apiKey) {
-    const response = await fetch(INNERTUBE_API_URL + apiKey, {
+    const url = INNERTUBE_API_URL.replace('{api_key}', apiKey);
+
+    const response = await fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
         body: JSON.stringify({
             context: INNERTUBE_CONTEXT,
@@ -159,6 +210,8 @@ async function fetchInnertubeData(videoId, apiKey) {
     });
 
     if (!response.ok) {
+        const text = await response.text();
+        console.error('[DEBUG] Innertube API error:', response.status, text.substring(0, 200));
         throw new Error('Innertube API 요청 실패');
     }
 
@@ -166,24 +219,41 @@ async function fetchInnertubeData(videoId, apiKey) {
 }
 
 function extractCaptionsJson(innertubeData, videoId) {
-    // Playability 확인
+    // Playability 상태 확인
     const playabilityStatus = innertubeData.playabilityStatus;
     if (playabilityStatus) {
         const status = playabilityStatus.status;
+        const reason = playabilityStatus.reason;
+
+        console.log('[DEBUG] Playability:', status, reason || '');
+
+        if (status === 'LOGIN_REQUIRED') {
+            if (reason && reason.includes('bot')) {
+                throw new Error('YouTube가 봇을 감지했습니다. 잠시 후 다시 시도해주세요.');
+            }
+            if (reason && reason.includes('age')) {
+                throw new Error('연령 제한이 있는 영상입니다.');
+            }
+        }
+
+        if (status === 'ERROR') {
+            throw new Error(reason || '영상을 재생할 수 없습니다.');
+        }
+
         if (status !== 'OK' && status) {
-            const reason = playabilityStatus.reason || '영상을 재생할 수 없습니다.';
-            throw new Error(reason);
+            throw new Error(reason || '영상을 재생할 수 없습니다.');
         }
     }
 
     const captions = innertubeData.captions;
     if (!captions) {
-        throw new Error('자막 정보가 없습니다.');
+        // 자막이 아예 없는 경우
+        throw new Error('이 영상에는 자막이 비활성화되어 있습니다.');
     }
 
     const captionsJson = captions.playerCaptionsTracklistRenderer;
     if (!captionsJson || !captionsJson.captionTracks) {
-        throw new Error('이 영상에는 자막이 없습니다.');
+        throw new Error('이 영상에는 사용 가능한 자막이 없습니다.');
     }
 
     return captionsJson;
@@ -192,31 +262,59 @@ function extractCaptionsJson(innertubeData, videoId) {
 function parseTranscriptXml(xmlText) {
     const segments = [];
 
-    // XML 파싱을 위한 정규식
-    const textRegex = /<text start="([^"]+)"(?: dur="([^"]+)")?[^>]*>([^<]*)<\/text>/g;
+    // XML 파싱 - <text start="..." dur="...">...</text>
+    const textRegex = /<text start="([^"]+)"(?: dur="([^"]+)")?[^>]*>([^<]*(?:<[^>]+>[^<]*)*)<\/text>/g;
     let match;
 
     while ((match = textRegex.exec(xmlText)) !== null) {
         const start = parseFloat(match[1]);
         const duration = parseFloat(match[2] || '0');
-        const text = decodeHtmlEntities(match[3]).trim();
+        let text = match[3];
+
+        // HTML 엔티티 디코딩 및 태그 제거
+        text = decodeHtmlEntities(text);
+        text = text.replace(/<[^>]*>/g, '').trim();
 
         if (text) {
             segments.push({ start, duration, text });
         }
     }
 
-    // 대체 파싱 (태그가 다른 경우)
+    // 대체 파싱 (다른 형식)
     if (segments.length === 0) {
-        const altRegex = /<p t="(\d+)" d="(\d+)"[^>]*>([^<]*)<\/p>/g;
+        const altRegex = /<p t="(\d+)" d="(\d+)"[^>]*>([^<]*(?:<[^>]+>[^<]*)*)<\/p>/g;
         while ((match = altRegex.exec(xmlText)) !== null) {
             const start = parseInt(match[1]) / 1000;
             const duration = parseInt(match[2]) / 1000;
-            const text = decodeHtmlEntities(match[3]).trim();
+            let text = decodeHtmlEntities(match[3]);
+            text = text.replace(/<[^>]*>/g, '').trim();
 
             if (text) {
                 segments.push({ start, duration, text });
             }
+        }
+    }
+
+    // 마지막 대체 파싱 (JSON 형식일 수 있음)
+    if (segments.length === 0) {
+        try {
+            const json = JSON.parse(xmlText);
+            if (json.events) {
+                for (const event of json.events) {
+                    if (event.segs) {
+                        const text = event.segs.map(s => s.utf8).join('').trim();
+                        if (text) {
+                            segments.push({
+                                start: (event.tStartMs || 0) / 1000,
+                                duration: (event.dDurationMs || 0) / 1000,
+                                text,
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // JSON이 아님
         }
     }
 
@@ -235,6 +333,5 @@ function decodeHtmlEntities(text) {
         .replace(/&apos;/g, "'")
         .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
         .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-        .replace(/\n/g, ' ')
-        .replace(/<[^>]*>/g, ''); // HTML 태그 제거
+        .replace(/\n/g, ' ');
 }
