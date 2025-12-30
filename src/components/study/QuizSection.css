@@ -35,6 +35,11 @@
     justify-content: space-between;
 }
 
+.quiz-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .quiz-progress {
     display: flex;
     align-items: baseline;

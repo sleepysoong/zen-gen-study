@@ -372,3 +372,60 @@ export async function chatWithContext({
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
     });
 }
+
+// ============================================
+// 플래시카드 함수
+// ============================================
+
+const FLASHCARD_PROMPT = `당신은 학습 카드 생성 전문가입니다. 영상 내용을 기반으로 플래시카드를 생성해주세요.
+
+규칙:
+1. 8-12개의 플래시카드를 생성하세요.
+2. 앞면(front)에는 핵심 개념이나 질문을, 뒷면(back)에는 답변이나 설명을 작성하세요.
+3. 암기하기 좋은 형태로 간결하게 작성하세요.
+4. 수학 공식은 LaTeX 문법($수식$)을 사용하세요.
+5. 이모지 사용을 자제하세요.
+6. 반드시 아래 JSON 형식으로만 응답하세요:
+
+{
+  "flashcards": [
+    {
+      "front": "질문 또는 핵심 개념",
+      "back": "답변 또는 설명"
+    }
+  ]
+}`;
+
+import type { FlashcardResult } from '../types';
+
+/**
+ * 플래시카드를 생성합니다.
+ */
+export async function generateFlashcards(
+    apiKey: string,
+    model: string,
+    transcript: string,
+    maxTokens = 2048
+): Promise<FlashcardResult> {
+    const response = await callOpenRouter({
+        apiKey,
+        model,
+        maxTokens,
+        temperature: 0.5,
+        messages: [
+            { role: 'system', content: FLASHCARD_PROMPT },
+            { role: 'user', content: `다음 영상 내용을 기반으로 플래시카드를 생성해주세요:\n\n${transcript}` },
+        ],
+    });
+
+    try {
+        const jsonMatch =
+            response.match(/```json\n?([\s\S]*?)\n?```/) ||
+            response.match(/\{[\s\S]*"flashcards"[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : response;
+        return JSON.parse(jsonStr);
+    } catch (error) {
+        console.error('플래시카드 파싱 실패:', error);
+        return { flashcards: [] };
+    }
+}

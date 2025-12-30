@@ -1,38 +1,33 @@
 /* SettingsPage.css */
 .settings-page {
-    max-width: 700px;
+    max-width: 600px;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 40px;
+    padding: 40px 24px;
 }
 
 .settings-title {
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
-    border-bottom: 2px solid var(--color-border);
-    padding-bottom: 16px;
+    margin-bottom: 32px;
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
 }
 
 .settings-section {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    animation: fadeIn 0.4s ease-out;
 }
 
 .settings-section-title {
     font-size: var(--text-lg);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-primary-dark);
-    margin-bottom: 4px;
-}
-
-.settings-form {
-    display: flex;
-    flex-direction: column;
-    gap: 40px;
+    font-weight: var(--font-weight-semibold);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
 }
 
 .settings-field {
@@ -43,74 +38,61 @@
 
 .settings-label {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     font-size: var(--text-sm);
     font-weight: var(--font-weight-medium);
-    color: var(--color-primary);
 }
 
 .settings-link {
-    color: var(--color-accent);
     font-size: var(--text-xs);
+    color: var(--color-accent);
     text-decoration: underline;
-    text-underline-offset: 2px;
-}
-
-.settings-link:hover {
-    color: var(--color-accent-dark);
 }
 
 .settings-hint {
     font-size: var(--text-xs);
     color: var(--color-primary-light);
-    margin-left: 4px;
 }
 
 .settings-value {
     font-weight: var(--font-weight-bold);
     color: var(--color-accent);
-    background-color: var(--color-bg-sub);
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    font-size: var(--text-xs);
 }
 
-/* Range Input */
 .settings-range {
-    -webkit-appearance: none;
     width: 100%;
     height: 6px;
-    background: var(--color-bg-sub);
     border-radius: var(--radius-full);
+    background: var(--color-border);
+    appearance: none;
     outline: none;
-    margin: 10px 0;
 }
 
 .settings-range::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: var(--color-primary);
-    cursor: pointer;
-    transition: var(--transition-base);
-    box-shadow: var(--shadow-sm);
-}
-
-.settings-range::-webkit-slider-thumb:hover {
-    transform: scale(1.1);
     background: var(--color-accent);
+    cursor: pointer;
+    appearance: none;
 }
 
-/* Models */
-.model-suggestions {
-    margin-top: 8px;
+.settings-actions {
+    margin-top: 20px;
+}
+
+.settings-data-actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
+    gap: 12px;
+}
+
+/* 모델 칩 */
+.model-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
 }
 
 .model-suggestions-label {
@@ -126,46 +108,38 @@
 
 .model-chip {
     padding: 6px 12px;
-    border-radius: var(--radius-full);
-    background-color: var(--color-bg-paper);
-    border: 1px solid var(--color-border);
     font-size: var(--text-xs);
-    color: var(--color-primary);
+    color: var(--color-primary-light);
+    background-color: var(--color-bg-sub);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
     transition: var(--transition-base);
 }
 
 .model-chip:hover {
-    border-color: var(--color-primary);
-    background-color: var(--color-bg-sub);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
 }
 
 .model-chip--active {
     background-color: var(--color-accent);
-    color: #fff;
     border-color: var(--color-accent);
+    color: #fff;
 }
 
-/* Actions */
-.settings-actions {
-    margin-top: 20px;
-    display: flex;
-    justify-content: flex-end;
-}
-
-.settings-data-actions {
-    display: flex;
-    gap: 12px;
-}
-
-/* Modal Content */
+/* 초기화 모달 */
 .settings-reset-modal {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
+}
+
+.settings-reset-modal p {
+    color: var(--color-primary-light);
 }
 
 .settings-reset-actions {
     display: flex;
-    justify-content: flex-end;
     gap: 12px;
+    justify-content: flex-end;
 }

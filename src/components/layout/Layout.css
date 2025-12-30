@@ -7,29 +7,4 @@
 
 .layout-main {
     flex: 1;
-    width: 100%;
-    max-width: var(--container-max-width);
-    margin: 0 auto;
-    padding: var(--spacing-xl) var(--spacing-md);
-    animation: fadeIn 0.5s ease-out;
-}
-
-/* 글로벌 애니메이션 */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* 반응형 */
-@media (max-width: 768px) {
-    .layout-main {
-        padding: var(--spacing-md);
-    }
 }

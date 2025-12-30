@@ -153,3 +153,30 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 
 /** 모달 크기 */
 export type ModalSize = 'sm' | 'md' | 'lg';
+
+// ============================================
+// 플래시카드 관련 타입
+// ============================================
+
+/** 플래시카드 */
+export interface Flashcard {
+    id: string;
+    front: string; // 질문/개념
+    back: string; // 답변/설명
+    known: boolean; // 알고 있는지 여부
+}
+
+/** 플래시카드 세트 */
+export interface FlashcardSet {
+    videoId: string;
+    cards: Flashcard[];
+    createdAt: number;
+}
+
+/** 플래시카드 생성 결과 */
+export interface FlashcardResult {
+    flashcards: Array<{
+        front: string;
+        back: string;
+    }>;
+}
